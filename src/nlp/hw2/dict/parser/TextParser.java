@@ -15,7 +15,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-import nlp.hw2.dict.wsd.pojo.TrainingSample;
 import nlp.hw2.dict.wsd.pojo.WSDWord;
 import nlp.hwz.dict.corenlp.Lemmatizer;
 import nlp.hwz.dict.pojo.Sense;
@@ -33,49 +32,82 @@ public class TextParser {
 	private static Lemmatizer lemmatizer;
 	private static Dictionary dict;
 	private static HashSet<String> stopwordList;
+	private static HashMap<String, List<Sense>> dictionary;
+
+	private static WSDWord currWord = null;
+	private static String currCtxt = null;
+	private static StringBuilder sb;
+
+	private static double totalAccuracy = 0.0;
+	private static int samplesize = 0;
 
 	public static void main(String[] args) {
 		long start = System.currentTimeMillis();
+		init();
 		prepareStopList();
-		// readTrainingData();
-		String input = "begin.v 0 1 0 1 0 @ Shall I open these ? To restore the peace . He @began@ to do so . If not the pieces . Then everyone went into the living room , leaving Sara to sweep up.";
-		TrainingSample ts = new TrainingSample(input);
-		WSDWord m_wsdWord = getWordInfo(ts.word);
-		System.out.println(m_wsdWord);
-		String crntCtxt = fiterString(ts.context);
-		System.out.println(crntCtxt);
-		// TODO test method for calculaetOverLap()
-		// testcalculateContentOverlap();
-		m_wsdWord = disambiguateSense(m_wsdWord, crntCtxt);
-		System.out.println(m_wsdWord.overlapScores.get(0));
-		System.out.println(m_wsdWord.overlapScores.get(1));
-		System.out.println(m_wsdWord.overlapScores.get(2));
-		System.out.println(m_wsdWord.overlapScores.get(3));
+		readTrainingData();
+		// String input =
+		// "begin.v 0 1 0 1 0 @ Shall I open these ? To restore the peace . He @began@ to do so . If not the pieces . Then everyone went into the living room , leaving Sara to sweep up.";
+		// rundictWSD(input);
+		System.out.println(totalAccuracy / samplesize);
 		System.out.println(System.currentTimeMillis() - start);
-
 	}
 
-	private static WSDWord disambiguateSense(WSDWord word, String context) {
+	private static void init() {
+		lemmatizer = Lemmatizer.getInstance();
+		wordnetInstance = Wordnet.getInstance();
+		dict = Dictionary.getInstance();
+		dictionary = dict.getSenses();
+		sb = new StringBuilder();
+	}
+
+	private static void rundictWSD(String input) {
+		System.out.println(samplesize);
+		// //// parse the input into its ingredients
+		int index = input.indexOf('.');
+		String word = input.substring(0, index).trim();
+		int delimiterIdx = input.indexOf('@');
+		String pattern = input.substring(index + 2, delimiterIdx).trim();
+		String[] scores = pattern.split(" ");
+		// storing values after first bit
+		int[] sensePattern = new int[scores.length - 1];
+		for (int i = 0; i < sensePattern.length; i++) {
+			sensePattern[i] = Integer.parseInt(scores[i + 1]);
+		}
+		String context = input.substring(delimiterIdx + 1).trim();
+		// ////
+
+		currWord = getWordInfo(word);
+		currCtxt = fiterString(context);
+		// TODO test method for calculaetOverLap()
+		// testcalculateContentOverlap();
+		totalAccuracy += disambiguateSense(currCtxt, sensePattern);
+	}
+
+	private static double disambiguateSense(String context, int[] expected) {
 		String[] ctxWrds = context.split(" ");
 		for (int i = 0; i < ctxWrds.length; i++) {
-			WSDWord ctxWord = getCtxtWordInfo(ctxWrds[i]);
-			if (ctxWord != null) {
-				word = calculateContentOverlap(word, ctxWord);
+			HashMap<Integer, List<LinkedHashSet<String>>> ctxWordNgrams = getCtxtWordInfo(ctxWrds[i]);
+			if (ctxWordNgrams != null) {
+				calculateContentOverlap(ctxWordNgrams);
 			}
 		}
-		return word;
+		double matchAccuracy = 0.0;
+		for (int i = 0; i < expected.length; i++) {
+			if (expected[i] == currWord.overlapScores.get(i)) {
+				matchAccuracy++;
+			}
+		}
+		return (matchAccuracy / expected.length);
 	}
 
 	public static WSDWord getWordInfo(String word) {
-		if (dict == null) {
-			dict = Dictionary.getInstance();
-		}
-		HashMap<String, List<Sense>> dictionary = dict.getSenses();
 		List<Sense> senses = dictionary.get(word);
 		HashMap<Integer, List<LinkedHashSet<String>>> senseToNgrams = new HashMap<Integer, List<LinkedHashSet<String>>>();
 		for (int i = 0; i < senses.size(); i++) {
 			List<LinkedHashSet<String>> allNgrams = new ArrayList<LinkedHashSet<String>>();
-			String senseTxt = senses.get(i).getGloss();
+			Sense currSense = senses.get(i);
+			String senseTxt = currSense.getGloss() + currSense.getSynset();
 			allNgrams.add(ngrams(1, fiterString(senseTxt)));
 			allNgrams.add(ngrams(2, fiterString(senseTxt)));
 			allNgrams.add(ngrams(3, fiterString(senseTxt)));
@@ -84,14 +116,12 @@ public class TextParser {
 		return new WSDWord(word, senseToNgrams);
 	}
 
-	public static WSDWord getCtxtWordInfo(String word) {
-		if (wordnetInstance == null) {
-			wordnetInstance = Wordnet.getInstance();
-		}
+	public static HashMap<Integer, List<LinkedHashSet<String>>> getCtxtWordInfo(
+			String word) {
+		HashMap<Integer, List<LinkedHashSet<String>>> senseToNgrams = null;
 		List<String> senses = wordnetInstance.getSenses(word);
-		WSDWord wsdWord = null;
 		if (senses != null) {
-			HashMap<Integer, List<LinkedHashSet<String>>> senseToNgrams = new HashMap<Integer, List<LinkedHashSet<String>>>();
+			senseToNgrams = new HashMap<Integer, List<LinkedHashSet<String>>>();
 			for (int i = 0; i < senses.size(); i++) {
 				List<LinkedHashSet<String>> allNgrams = new ArrayList<LinkedHashSet<String>>();
 				String senseTxt = senses.get(i);
@@ -100,9 +130,8 @@ public class TextParser {
 				allNgrams.add(ngrams(3, fiterString(senseTxt)));
 				senseToNgrams.put(i, allNgrams);
 			}
-			wsdWord = new WSDWord(word, senseToNgrams);
 		}
-		return wsdWord;
+		return senseToNgrams;
 	}
 
 	/**
@@ -112,15 +141,16 @@ public class TextParser {
 	 * @param ctxt
 	 * @return
 	 */
-	private static WSDWord calculateContentOverlap(WSDWord word, WSDWord ctxt) {
-		Iterator<List<LinkedHashSet<String>>> itr = word.senseToNgrams.values()
-				.iterator();
+	private static void calculateContentOverlap(
+			HashMap<Integer, List<LinkedHashSet<String>>> ctxtSenseNgrams) {
+		Iterator<List<LinkedHashSet<String>>> itr = currWord.senseToNgrams
+				.values().iterator();
 		int senseIdx = 0;
 		while (itr.hasNext()) {
 			List<LinkedHashSet<String>> ngrams = itr.next();
 			LinkedHashSet<String> unigrams = ngrams.get(0);
 			int maxOverlap = Integer.MIN_VALUE;
-			Iterator<List<LinkedHashSet<String>>> ctxItr = ctxt.senseToNgrams
+			Iterator<List<LinkedHashSet<String>>> ctxItr = ctxtSenseNgrams
 					.values().iterator();
 			while (ctxItr.hasNext()) {
 				List<LinkedHashSet<String>> ctxNgrams = ctxItr.next();
@@ -137,7 +167,7 @@ public class TextParser {
 					cloneSet.retainAll(ctxBigrams);
 					biCnt = cloneSet.size();
 				}
-				if (biCnt > 1) {// calculate for trigrams
+				if (biCnt > 2) {// calculate for trigrams
 					LinkedHashSet<String> trigrams = ngrams.get(2);
 					LinkedHashSet<String> ctxTrigrams = ctxNgrams.get(2);
 					cloneSet = new LinkedHashSet<String>(trigrams);
@@ -150,11 +180,10 @@ public class TextParser {
 				}
 			}
 			// retain the max score obtained for this sense
-			word.overlapScores.put(senseIdx, maxOverlap);
+			currWord.overlapScores.put(senseIdx, maxOverlap);
 			// move to next sense of word
 			senseIdx++;
 		}
-		return word;
 	}
 
 	public static ArrayList<String> getTokens(String str) {
@@ -213,8 +242,10 @@ public class TextParser {
 		BufferedReader br = null;
 		try {
 			br = new BufferedReader(new FileReader(TRAINING_DATA));
-			while ((line = br.readLine()) != null) {
-				System.out.println(line);
+			while ((line = br.readLine()) != null && samplesize < 1000) {
+				rundictWSD(line);
+				samplesize++;
+				continue;
 			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -245,20 +276,17 @@ public class TextParser {
 	}
 
 	public static String fiterString(String str) {
-		StringBuilder stbr = new StringBuilder();
+		sb.delete(0, sb.length());
 		for (int i = 0; i < str.length(); i++) {
 			char ch = str.charAt(i);
 			if (!((ch == '(') || (ch == ')') || (ch == ';') || (ch == ','))) {
-				stbr.append(str.charAt(i));
+				sb.append(str.charAt(i));
 			}
 		}
-		String strFltr = stbr.toString();
+		str = sb.toString();
 		// String lemmatized = Lemmatizer.getLemma(strFltr);
-		StringBuilder sb = new StringBuilder();
-		String[] tokens = strFltr.split(" ");
-		if (lemmatizer == null) {
-			lemmatizer = Lemmatizer.getInstance();
-		}
+		sb.delete(0, sb.length());
+		String[] tokens = str.split(" ");
 		for (int i = 0; i < tokens.length; i++) {
 			String token = tokens[i].toLowerCase();
 			if (!stopwordList.contains(token)) {
@@ -312,6 +340,6 @@ public class TextParser {
 		ctxt.senseToNgrams = ctxtSenseToNgrams;
 		System.out.println(word);
 		System.out.println(ctxt);
-		calculateContentOverlap(word, ctxt);
+		// calculateContentOverlap(word, ctxt);
 	}
 }

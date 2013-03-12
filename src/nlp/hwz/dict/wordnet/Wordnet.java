@@ -9,6 +9,8 @@ import edu.smu.tspell.wordnet.WordNetDatabase;
 public class Wordnet {
 
 	private static Wordnet instance;
+	private static WordNetDatabase database;
+	private static StringBuilder sb;
 
 	public static void main(String[] args) {
 		String wordForm = "accomplish";
@@ -23,31 +25,34 @@ public class Wordnet {
 	public static Wordnet getInstance() {
 		if (instance == null) {
 			instance = new Wordnet();
+			database = WordNetDatabase.getFileInstance();
+			sb = new StringBuilder();
 		}
 		return instance;
 	}
 
 	public List<String> getSenses(String wordForm) {
-		List<String> senses = null;
+		List<String> senses = new ArrayList<String>();
 		// Get the synsets containing the wrod form
-		WordNetDatabase database = WordNetDatabase.getFileInstance();
+
 		Synset[] synsets = database.getSynsets(wordForm);
 		// Display the word forms and definitions for synsets retrieved
 		if (synsets.length > 0) {
-			senses = new ArrayList<String>();
+//			senses = new ArrayList<String>();
 			for (int i = 0; i < synsets.length; i++) {
 				String[] wordForms = synsets[i].getWordForms();
-				String sense = "";
+				sb.delete(0, sb.length());
 				for (int j = 0; j < wordForms.length; j++) {
-					sense += wordForms[j] + "; ";
+					sb.append(wordForms[j] + "; ");
 				}
-				sense += synsets[i].getDefinition();
-				senses.add(sense);
+				sb.append(synsets[i].getDefinition());
+				senses.add(sb.toString());
 			}
 		} else {
-			System.err.println("No synsets exist that contain "
-					+ "the word form '" + wordForm + "'");
+			// System.err.println("No synsets exist that contain "
+			// + "the word form '" + wordForm + "'");
 		}
+		senses.add(wordForm);
 		return senses;
 	}
 }
