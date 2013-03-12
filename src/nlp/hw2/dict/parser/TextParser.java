@@ -242,7 +242,7 @@ public class TextParser {
 		BufferedReader br = null;
 		try {
 			br = new BufferedReader(new FileReader(TRAINING_DATA));
-			while ((line = br.readLine()) != null && samplesize < 1000) {
+			while ((line = br.readLine()) != null && samplesize < 8000) {
 				rundictWSD(line);
 				samplesize++;
 				continue;
