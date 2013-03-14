@@ -1,9 +1,11 @@
 package nlp.hw2.dict.parser;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -40,6 +42,7 @@ public class TextParser {
 
 	private static double totalAccuracy = 0.0;
 	private static int samplesize = 0;
+	private static String output = "";
 
 	public static void main(String[] args) {
 		long start = System.currentTimeMillis();
@@ -49,6 +52,21 @@ public class TextParser {
 		// String input =
 		// "begin.v 0 1 0 1 0 @ Shall I open these ? To restore the peace . He @began@ to do so . If not the pieces . Then everyone went into the living room , leaving Sara to sweep up.";
 		// rundictWSD(input);
+		System.out.println(output);
+		BufferedWriter bw = null;
+		try {
+			bw = new BufferedWriter(new FileWriter("output.txt"));
+			bw.write(output);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		try {
+			bw.close();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		System.out.println(totalAccuracy / samplesize);
 		System.out.println(System.currentTimeMillis() - start);
 	}
@@ -62,7 +80,7 @@ public class TextParser {
 	}
 
 	private static void rundictWSD(String input) {
-		System.out.println(samplesize);
+		// System.out.println(samplesize);
 		// //// parse the input into its ingredients
 		int index = input.indexOf('.');
 		String word = input.substring(0, index).trim();
@@ -77,11 +95,16 @@ public class TextParser {
 		String context = input.substring(delimiterIdx + 1).trim();
 		// ////
 
+		// for writing the output
+		output += pattern + " @ ";
+
 		currWord = getWordInfo(word);
 		currCtxt = fiterString(context);
 		// TODO test method for calculaetOverLap()
 		// testcalculateContentOverlap();
 		totalAccuracy += disambiguateSense(currCtxt, sensePattern);
+		// for writing the output
+		output += "\n";
 	}
 
 	private static double disambiguateSense(String context, int[] expected) {
@@ -90,6 +113,26 @@ public class TextParser {
 			HashMap<Integer, List<LinkedHashSet<String>>> ctxWordNgrams = getCtxtWordInfo(ctxWrds[i]);
 			if (ctxWordNgrams != null) {
 				calculateContentOverlap(ctxWordNgrams);
+			}
+		}
+		// normalize scores
+		Iterator<Integer> itr = currWord.overlapScores.keySet().iterator();
+		int total = 0;
+		while (itr.hasNext()) {
+			total += currWord.overlapScores.get(itr.next());
+		}
+		if (total != 0) {
+			itr = currWord.overlapScores.keySet().iterator();
+			while (itr.hasNext()) {
+				int key = itr.next();
+				int value = currWord.overlapScores.get(key);
+				int updatedValue = (int) ((value / total) + 0.5);
+				output += (double) value / total + " ";
+				currWord.overlapScores.put(key, updatedValue);
+			}
+		} else {
+			for (int i = 0; i < currWord.overlapScores.size(); i++) {
+				output += "0 ";
 			}
 		}
 		double matchAccuracy = 0.0;
@@ -242,7 +285,7 @@ public class TextParser {
 		BufferedReader br = null;
 		try {
 			br = new BufferedReader(new FileReader(TRAINING_DATA));
-			while ((line = br.readLine()) != null && samplesize < 8000) {
+			while ((line = br.readLine()) != null && samplesize < 10) {
 				rundictWSD(line);
 				samplesize++;
 				continue;
