@@ -80,19 +80,30 @@ public class TextParser {
 	}
 
 	private static void rundictWSD(String input) {
-		// System.out.println(samplesize);
+		System.out.println("Inside rundictWSD :: " + samplesize);
+		//System.out.println(input);
 		// //// parse the input into its ingredients
 		int index = input.indexOf('.');
 		String word = input.substring(0, index).trim();
 		int delimiterIdx = input.indexOf('@');
+
+		/*
+		 * Pattern holds the expected values
+		 */
+
 		String pattern = input.substring(index + 2, delimiterIdx).trim();
+
+		//System.out.println("Expected String :: " + pattern);
 		String[] scores = pattern.split(" ");
+
 		// storing values after first bit
 		int[] sensePattern = new int[scores.length - 1];
 		for (int i = 0; i < sensePattern.length; i++) {
 			sensePattern[i] = Integer.parseInt(scores[i + 1]);
 		}
 		String context = input.substring(delimiterIdx + 1).trim();
+
+		//System.out.println(context);
 		// ////
 
 		// for writing the output
@@ -100,8 +111,10 @@ public class TextParser {
 
 		currWord = getWordInfo(word);
 		currCtxt = fiterString(context);
+		//System.out.println("Processed test String " + currCtxt);
 		// TODO test method for calculaetOverLap()
 		// testcalculateContentOverlap();
+		// return;
 		totalAccuracy += disambiguateSense(currCtxt, sensePattern);
 		// for writing the output
 		output += "\n";
@@ -150,7 +163,11 @@ public class TextParser {
 		for (int i = 0; i < senses.size(); i++) {
 			List<LinkedHashSet<String>> allNgrams = new ArrayList<LinkedHashSet<String>>();
 			Sense currSense = senses.get(i);
-			String senseTxt = currSense.getGloss() + currSense.getSynset();
+			String senseTxt = currSense.getGloss() + " "
+					+ currSense.getSynset();
+			//System.out.println(senseTxt);
+			//System.out.println(fiterString(senseTxt));
+			//System.out.println();
 			allNgrams.add(ngrams(1, fiterString(senseTxt)));
 			allNgrams.add(ngrams(2, fiterString(senseTxt)));
 			allNgrams.add(ngrams(3, fiterString(senseTxt)));
@@ -168,6 +185,7 @@ public class TextParser {
 			for (int i = 0; i < senses.size(); i++) {
 				List<LinkedHashSet<String>> allNgrams = new ArrayList<LinkedHashSet<String>>();
 				String senseTxt = senses.get(i);
+				// System.out.println(word + " :: " + senseTxt);
 				allNgrams.add(ngrams(1, fiterString(senseTxt)));
 				allNgrams.add(ngrams(2, fiterString(senseTxt)));
 				allNgrams.add(ngrams(3, fiterString(senseTxt)));
@@ -217,13 +235,19 @@ public class TextParser {
 					cloneSet.retainAll(ctxTrigrams);
 					triCnt = cloneSet.size();
 				}
-				int overlap = uniCnt + (2 * biCnt) + (3 * triCnt);
+				int overlap = uniCnt + (4 * biCnt) + (9 * triCnt);
+				//System.out.println(overlap + " " + maxOverlap);
 				if (overlap > maxOverlap) {
 					maxOverlap = overlap;
 				}
 			}
+			int currentValue = 0;
+			if (currWord.overlapScores.containsKey(senseIdx)) {
+				currentValue = currWord.overlapScores.get(senseIdx);
+			}
+			currentValue += maxOverlap;
 			// retain the max score obtained for this sense
-			currWord.overlapScores.put(senseIdx, maxOverlap);
+			currWord.overlapScores.put(senseIdx, currentValue);
 			// move to next sense of word
 			senseIdx++;
 		}
@@ -285,7 +309,7 @@ public class TextParser {
 		BufferedReader br = null;
 		try {
 			br = new BufferedReader(new FileReader(TRAINING_DATA));
-			while ((line = br.readLine()) != null && samplesize < 10) {
+			while ((line = br.readLine()) != null && samplesize < 3) {
 				rundictWSD(line);
 				samplesize++;
 				continue;
@@ -306,6 +330,9 @@ public class TextParser {
 	public static LinkedHashSet<String> ngrams(int n, String str) {
 		LinkedHashSet<String> ngrams = new LinkedHashSet<String>();
 		String[] words = str.split(" ");
+		for (int i = 0; i < words.length; i++) {
+			words[i] = words[i].trim();
+		}
 		for (int i = 0; i < words.length - n + 1; i++)
 			ngrams.add(concat(words, i, i + n));
 		return ngrams;
@@ -322,8 +349,11 @@ public class TextParser {
 		sb.delete(0, sb.length());
 		for (int i = 0; i < str.length(); i++) {
 			char ch = str.charAt(i);
-			if (!((ch == '(') || (ch == ')') || (ch == ';') || (ch == ','))) {
+			if (!((ch == '(') || (ch == ')') || (ch == ';') || ch == '@'
+					|| ch == '_' || (ch == ',') || (ch == '/'))) {
 				sb.append(str.charAt(i));
+			} else {
+				sb.append(" ");
 			}
 		}
 		str = sb.toString();
@@ -331,11 +361,12 @@ public class TextParser {
 		sb.delete(0, sb.length());
 		String[] tokens = str.split(" ");
 		for (int i = 0; i < tokens.length; i++) {
-			String token = tokens[i].toLowerCase();
-			if (!stopwordList.contains(token)) {
-				sb.append(lemmatizer.getLemma(token));
-			}
+			String token = tokens[i].trim().toLowerCase();
+			// if (!stopwordList.contains(token) && token.length() > 0) {
+			sb.append(lemmatizer.getLemma(token));
+			// }
 		}
+		// System.out.println(sb);
 		return sb.toString();
 	}
 
